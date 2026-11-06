@@ -44,4 +44,3 @@ authRouter.post('/logout', requireAuth, async (_req, res) => {
   await sessions.deleteOne({ _id: getAuth(res).sessionId });
   res.status(204).send();
 });
-

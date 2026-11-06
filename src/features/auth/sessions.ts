@@ -39,4 +39,3 @@ export async function createSession(userId: ObjectId): Promise<{ token: string; 
 export function publicUser(user: WithId<User>) {
   return { id: user._id.toHexString(), name: user.name, telephone: user.telephone, email: user.email, role: user.role };
 }
-

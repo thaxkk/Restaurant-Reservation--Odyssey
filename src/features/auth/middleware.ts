@@ -34,4 +34,3 @@ export const requireAdmin: RequestHandler = (_req, res, next) => {
   if (getAuth(res).role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'Admin access required');
   next();
 };
-

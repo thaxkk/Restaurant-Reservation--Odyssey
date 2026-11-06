@@ -17,4 +17,3 @@ export async function verifyPassword(password: string, encoded: string): Promise
   const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length) as Buffer;
   return timingSafeEqual(actual, expected);
 }
-

@@ -75,4 +75,3 @@ adminRouter.get('/reservations', requireAuth, requireAdmin, async (req, res) => 
   }));
   res.json({ items, page: query.page, limit: query.limit, total: result.count[0]?.total ?? 0 });
 });
-

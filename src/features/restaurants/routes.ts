@@ -96,4 +96,3 @@ restaurantRouter.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
   if (result.matchedCount === 0) throw new ApiError(404, 'NOT_FOUND', 'Restaurant not found');
   res.status(204).send();
 });
-

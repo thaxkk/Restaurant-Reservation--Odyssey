@@ -1,5 +1,9 @@
-import express, { type ErrorRequestHandler } from 'express';
+import express from 'express';
 import { db } from './db.js';
+import { adminRouter } from './features/admin/routes.js';
+import { authRouter } from './features/auth/routes.js';
+import { restaurantRouter } from './features/restaurants/routes.js';
+import { errorHandler, notFound } from './http.js';
 
 export const app = express();
 
@@ -19,18 +23,8 @@ app.get('/health/ready', async (_req, res, next) => {
   }
 });
 
-app.use((_req, res) => {
-  res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found' } });
-});
-
-const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-  if (error instanceof SyntaxError && 'body' in error) {
-    res.status(400).json({ error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } });
-    return;
-  }
-
-  console.error(error);
-  res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
-};
-
+app.use('/api/auth', authRouter);
+app.use('/api/restaurants', restaurantRouter);
+app.use('/api/admin', adminRouter);
+app.use(notFound);
 app.use(errorHandler);

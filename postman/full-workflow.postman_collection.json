@@ -1,0 +1,1850 @@
+{
+  "info": {
+    "name": "Odyssey API — Complete runner",
+    "description": "Run all requests in order against a test Atlas database. Requires an existing promoted admin account. Creates fresh users and one restaurant; cancels bookings and soft-deletes the restaurant at the end. Covers auth, restaurants, capacity, reservations, admin filters, FIFO waitlist, history, and logout.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "adminEmail",
+      "value": ""
+    },
+    {
+      "key": "adminPassword",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Ready and initialize fresh run",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health/ready"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const id = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;",
+              "pm.collectionVariables.set('runId', id);",
+              "pm.collectionVariables.set('reservationDate', new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));",
+              "pm.collectionVariables.set('otherDate', new Date(Date.now() + 31 * 86400000).toISOString().slice(0, 10));",
+              "pm.collectionVariables.set('testPassword', 'Odyssey-Test-Password-123!');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Atlas ready', () => pm.expect(pm.response.json().status).to.equal('ready'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Login existing admin",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/login",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('adminToken', pm.response.json().token);",
+              "  pm.test('Admin role', () => pm.expect(pm.response.json().user.role).to.equal('admin'));",
+              "  if (pm.response.json().user.role !== 'admin') pm.execution.setNextRequest(null);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Register user A",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/register",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Runner A\",\n  \"telephone\": \"0810000001\",\n  \"email\": \"odyssey-run-{{runId}}-a@example.com\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Public user role', () => pm.expect(pm.response.json().user.role).to.equal('user'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login user A",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/login",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"odyssey-run-{{runId}}-a@example.com\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('aToken', pm.response.json().token);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Register user B",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/register",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Runner B\",\n  \"telephone\": \"0810000002\",\n  \"email\": \"odyssey-run-{{runId}}-b@example.com\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Public user role', () => pm.expect(pm.response.json().user.role).to.equal('user'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login user B",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/login",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"odyssey-run-{{runId}}-b@example.com\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('bToken', pm.response.json().token);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Register user C",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/register",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Runner C\",\n  \"telephone\": \"0810000003\",\n  \"email\": \"odyssey-run-{{runId}}-c@example.com\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Public user role', () => pm.expect(pm.response.json().user.role).to.equal('user'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login user C",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/login",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"odyssey-run-{{runId}}-c@example.com\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('cToken', pm.response.json().token);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List restaurants",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/restaurants?page=1&limit=2"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Paged restaurant list', () => { const b = pm.response.json(); pm.expect(b.items).to.be.an('array'); pm.expect(b.limit).to.equal(2); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User cannot create restaurant",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/restaurants",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Forbidden\",\n  \"address\": \"Bangkok\",\n  \"telephone\": \"021234567\",\n  \"opensAt\": \"10:00\",\n  \"closesAt\": \"22:00\",\n  \"totalTables\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 403', () => pm.response.to.have.status(403));",
+              "if (pm.response.code !== 403) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin creates one-table restaurant",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/restaurants",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Odyssey Runner {{runId}}\",\n  \"address\": \"Bangkok\",\n  \"telephone\": \"021234567\",\n  \"opensAt\": \"00:00\",\n  \"closesAt\": \"23:59\",\n  \"totalTables\": 1,\n  \"seatsPerTable\": 4\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('restaurantId', pm.response.json().restaurant.id);",
+              "  pm.test('Four seats per table', () => pm.expect(pm.response.json().restaurant.seatsPerTable).to.equal(4));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get restaurant",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/restaurants/{{restaurantId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Correct restaurant', () => pm.expect(pm.response.json().restaurant.id).to.equal(pm.collectionVariables.get('restaurantId')));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User A books final table",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/reservations",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"reservationDate\": \"{{reservationDate}}\",\n  \"reservationTime\": \"18:00\",\n  \"partySize\": 4,\n  \"tablesRequested\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('reservationAId', pm.response.json().id);",
+              "  pm.test('Confirmed', () => pm.expect(pm.response.json().status).to.equal('confirmed'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject five people at one table",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/reservations",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"reservationDate\": \"{{reservationDate}}\",\n  \"reservationTime\": \"18:00\",\n  \"partySize\": 5,\n  \"tablesRequested\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "if (pm.response.code !== 400) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Error PARTY_TOO_LARGE', () => pm.expect(pm.response.json().error.code).to.equal('PARTY_TOO_LARGE'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject more than three tables",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/reservations",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"reservationDate\": \"{{reservationDate}}\",\n  \"reservationTime\": \"18:00\",\n  \"partySize\": 4,\n  \"tablesRequested\": 4\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "if (pm.response.code !== 400) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject impossible date",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/reservations",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"reservationDate\": \"2027-02-31\",\n  \"reservationTime\": \"18:00\",\n  \"partySize\": 4,\n  \"tablesRequested\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "if (pm.response.code !== 400) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User B cannot book full slot",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/reservations",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"reservationDate\": \"{{reservationDate}}\",\n  \"reservationTime\": \"18:00\",\n  \"partySize\": 4,\n  \"tablesRequested\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "if (pm.response.code !== 409) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Error SLOT_FULL', () => pm.expect(pm.response.json().error.code).to.equal('SLOT_FULL'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User B joins waitlist first",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/waitlist",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"reservationDate\": \"{{reservationDate}}\",\n  \"reservationTime\": \"18:00\",\n  \"partySize\": 4,\n  \"tablesRequested\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('waitlistBId', pm.response.json().id);",
+              "  pm.test('Waiting', () => pm.expect(pm.response.json().status).to.equal('waiting'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User C joins waitlist second",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/waitlist",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{cToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"reservationDate\": \"{{reservationDate}}\",\n  \"reservationTime\": \"18:00\",\n  \"partySize\": 4,\n  \"tablesRequested\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('waitlistCId', pm.response.json().id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Duplicate waitlist entry rejected",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/waitlist",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"reservationDate\": \"{{reservationDate}}\",\n  \"reservationTime\": \"18:00\",\n  \"partySize\": 4,\n  \"tablesRequested\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "if (pm.response.code !== 409) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Error ALREADY_WAITING', () => pm.expect(pm.response.json().error.code).to.equal('ALREADY_WAITING'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject capacity decrease below booking",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/restaurants/{{restaurantId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"seatsPerTable\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "if (pm.response.code !== 409) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Error CAPACITY_IN_USE', () => pm.expect(pm.response.json().error.code).to.equal('CAPACITY_IN_USE'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject restaurant deletion while in use",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/restaurants/{{restaurantId}}",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "if (pm.response.code !== 409) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Error RESTAURANT_IN_USE', () => pm.expect(pm.response.json().error.code).to.equal('RESTAURANT_IN_USE'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User B cannot view A booking",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/reservations/{{reservationAId}}",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 403', () => pm.response.to.have.status(403));",
+              "if (pm.response.code !== 403) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin views A booking",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/reservations/{{reservationAId}}",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Correct booking', () => pm.expect(pm.response.json().id).to.equal(pm.collectionVariables.get('reservationAId')));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User B cannot edit A booking",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/reservations/{{reservationAId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"partySize\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 403', () => pm.response.to.have.status(403));",
+              "if (pm.response.code !== 403) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin edits A booking",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/reservations/{{reservationAId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"partySize\": 3\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Party changed', () => pm.expect(pm.response.json().partySize).to.equal(3));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User A sees upcoming booking",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/reservations?when=upcoming&status=confirmed",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Contains A booking', () => pm.expect(pm.response.json().items.map(x => x.id)).to.include(pm.collectionVariables.get('reservationAId')));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin filters, sorts, and pages bookings",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/admin/reservations?page=1&limit=1&date={{reservationDate}}&status=confirmed&restaurantName=Odyssey%20Runner%20{{runId}}&sortBy=date&order=asc",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Filtered paged result', () => { const b = pm.response.json(); pm.expect(b.page).to.equal(1); pm.expect(b.limit).to.equal(1); pm.expect(b.total).to.be.at.least(1); pm.expect(b.items[0].id).to.equal(pm.collectionVariables.get('reservationAId')); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User A cancels booking",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/reservations/{{reservationAId}}",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User B receives first offer",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/waitlist",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('B offered', () => { const e = pm.response.json().items.find(x => x.id === pm.collectionVariables.get('waitlistBId')); pm.expect(e.status).to.equal('offered'); pm.expect(e.offerExpiresAt).to.be.a('string'); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User C still waits",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/waitlist",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{cToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('C waiting', () => { const e = pm.response.json().items.find(x => x.id === pm.collectionVariables.get('waitlistCId')); pm.expect(e.status).to.equal('waiting'); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Direct booking cannot bypass queue",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/reservations",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"reservationDate\": \"{{reservationDate}}\",\n  \"reservationTime\": \"18:00\",\n  \"partySize\": 4,\n  \"tablesRequested\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "if (pm.response.code !== 409) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Error WAITLIST_PRIORITY', () => pm.expect(pm.response.json().error.code).to.equal('WAITLIST_PRIORITY'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User C cannot accept before offer",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/waitlist/{{waitlistCId}}/accept",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{cToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "if (pm.response.code !== 409) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Error NO_OPEN_OFFER', () => pm.expect(pm.response.json().error.code).to.equal('NO_OPEN_OFFER'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User B accepts first offer",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/waitlist/{{waitlistBId}}/accept",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('reservationBId', pm.response.json().id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Offer cannot be accepted twice",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/waitlist/{{waitlistBId}}/accept",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "if (pm.response.code !== 409) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Error NO_OPEN_OFFER', () => pm.expect(pm.response.json().error.code).to.equal('NO_OPEN_OFFER'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin adds a table",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/restaurants/{{restaurantId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"totalTables\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Two tables', () => pm.expect(pm.response.json().restaurant.totalTables).to.equal(2));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User C receives offer after capacity increase",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/waitlist",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{cToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('C offered', () => { const e = pm.response.json().items.find(x => x.id === pm.collectionVariables.get('waitlistCId')); pm.expect(e.status).to.equal('offered'); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User C accepts second offer",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/waitlist/{{waitlistCId}}/accept",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{cToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('reservationCId', pm.response.json().id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin cannot reduce capacity below two bookings",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/restaurants/{{restaurantId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"totalTables\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "if (pm.response.code !== 409) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Error CAPACITY_IN_USE', () => pm.expect(pm.response.json().error.code).to.equal('CAPACITY_IN_USE'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User B cancels booking",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/reservations/{{reservationBId}}",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin cancels C booking",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/reservations/{{reservationCId}}",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User B sees cancelled history",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/reservations?status=cancelled",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Cancelled B booking retained', () => pm.expect(pm.response.json().items.map(x => x.id)).to.include(pm.collectionVariables.get('reservationBId')));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User A books another date",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/reservations",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"reservationDate\": \"{{otherDate}}\",\n  \"reservationTime\": \"18:00\",\n  \"partySize\": 2,\n  \"tablesRequested\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('otherReservationId', pm.response.json().id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User A edits own booking",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/reservations/{{otherReservationId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"partySize\": 4\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Owner edit applied', () => pm.expect(pm.response.json().partySize).to.equal(4));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User B joins second slot waitlist",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/waitlist",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"reservationDate\": \"{{otherDate}}\",\n  \"reservationTime\": \"18:00\",\n  \"partySize\": 4,\n  \"tablesRequested\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); } else {",
+              "  pm.collectionVariables.set('waitlistLeaveId', pm.response.json().id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User B leaves waitlist",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/waitlist/{{waitlistLeaveId}}",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User A cancels second booking",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/reservations/{{otherReservationId}}",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User A past history query",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/reservations?when=past",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Past history response', () => pm.expect(pm.response.json().items).to.be.an('array'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin filters cancelled bookings",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/admin/reservations?status=cancelled&restaurantId={{restaurantId}}&sortBy=createdAt&order=desc&limit=2",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Paged cancelled list', () => { const b = pm.response.json(); pm.expect(b.items.length).to.equal(2); pm.expect(b.total).to.be.at.least(3); pm.expect(b.items.every(x => x.status === 'cancelled')).to.equal(true); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin completed-status query",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/admin/reservations?status=completed&restaurantId={{restaurantId}}",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Completed filter response', () => pm.expect(pm.response.json().items).to.be.an('array'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin deletes empty restaurant",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/restaurants/{{restaurantId}}",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Deleted restaurant is hidden",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/restaurants/{{restaurantId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "if (pm.response.code !== 404) { pm.execution.setNextRequest(null); } else {",
+              "  pm.test('Error NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.equal('NOT_FOUND'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logout a",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/logout",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logout b",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/logout",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logout c",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/logout",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{cToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logout admin",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/logout",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Revoked token cannot access history",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/reservations",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{aToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "if (pm.response.code !== 401) { pm.execution.setNextRequest(null); } else {",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

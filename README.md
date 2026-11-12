@@ -19,9 +19,9 @@ npm run dev
 
 Replace `MONGODB_URI` in `.env` with your Atlas connection string and set `MONGODB_DB_NAME` if needed. In Atlas, allow your development IP address in Network Access. If the password contains reserved URI characters such as `@` or `/`, URL-encode it. Keep `.env` private.
 
-Check `GET http://localhost:3000/health` for process health and `GET http://localhost:3000/health/ready` for database readiness. The API accepts and returns JSON. Import the [Member A](postman/member-a.postman_collection.json) or [Member B](postman/member-b.postman_collection.json) Postman collection for request examples.
+Check `GET http://localhost:3000/health` for process health and `GET http://localhost:3000/health/ready` for database readiness. The API accepts and returns JSON. Import the [complete runner](postman/full-workflow.postman_collection.json) to test the integrated API in one run, or use the [Member A](postman/member-a.postman_collection.json) and [Member B](postman/member-b.postman_collection.json) collections for smaller examples. See [Postman instructions](postman/README.md) for runner setup.
 
-For the Postman runner, run the **1. Register user** folder once. Then, in this project's terminal, run `npm run admin:grant -- ada@example.com` (or the email set in the collection). The command requires access to the same Atlas database. Next run only the **2. Admin workflow** folder; its Login request obtains a new token and checks for the admin role before sending admin requests. Running the whole collection without the promotion cannot pass because public registration always creates a normal user. Keep tokens private.
+For the Member A collection, run the **1. Register user** folder once. Then, in this project's terminal, run `npm run admin:grant -- ada@example.com` (or the email set in the collection). The command requires access to the same Atlas database. Next run only the **2. Admin workflow** folder; its Login request obtains a new token and checks for the admin role before sending admin requests. Running the whole collection without the promotion cannot pass because public registration always creates a normal user. Keep tokens private.
 
 Use HTTPS when deploying the API so passwords and bearer tokens are encrypted in transit. The local HTTP URL is for development only.
 

@@ -1,5 +1,8 @@
-import express, { type ErrorRequestHandler } from 'express';
+import express from 'express';
 import { db } from './db.js';
+import { errorHandler, notFound } from './http.js';
+import { reservationsRouter } from './features/reservations/routes.js';
+import { waitlistRouter } from './features/waitlist/routes.js';
 
 export const app = express();
 
@@ -19,18 +22,10 @@ app.get('/health/ready', async (_req, res, next) => {
   }
 });
 
-app.use((_req, res) => {
-  res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found' } });
-});
+// Member B feature routers. At integration, add Member A's auth/restaurants/
+// admin routers here too (and keep her shared http.ts / auth middleware).
+app.use('/api/reservations', reservationsRouter);
+app.use('/api/waitlist', waitlistRouter);
 
-const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-  if (error instanceof SyntaxError && 'body' in error) {
-    res.status(400).json({ error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } });
-    return;
-  }
-
-  console.error(error);
-  res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
-};
-
+app.use(notFound);
 app.use(errorHandler);

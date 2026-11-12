@@ -14,6 +14,16 @@ const collections = {
       updatedAt: { bsonType: 'date' },
     },
   },
+  sessions: {
+    bsonType: 'object',
+    required: ['tokenHash', 'userId', 'createdAt', 'expiresAt'],
+    properties: {
+      tokenHash: { bsonType: 'string' },
+      userId: { bsonType: 'objectId' },
+      createdAt: { bsonType: 'date' },
+      expiresAt: { bsonType: 'date' },
+    },
+  },
   restaurants: {
     bsonType: 'object',
     required: ['name', 'address', 'telephone', 'opensAt', 'closesAt', 'totalTables', 'createdAt', 'updatedAt'],
@@ -26,6 +36,7 @@ const collections = {
       totalTables: { bsonType: 'int', minimum: 1 },
       createdAt: { bsonType: 'date' },
       updatedAt: { bsonType: 'date' },
+      deletedAt: { bsonType: 'date' },
     },
   },
   reservations: {
@@ -83,7 +94,9 @@ async function setup() {
   }
 
   await db.collection('users').createIndex({ email: 1 }, { unique: true });
-  await db.collection('restaurants').createIndex({ name: 1 });
+  await db.collection('sessions').createIndex({ tokenHash: 1 }, { unique: true });
+  await db.collection('sessions').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await db.collection('restaurants').createIndex({ deletedAt: 1, name: 1 });
   await db.collection('reservations').createIndex({ userId: 1, reservationDate: 1, reservationTime: 1 });
   await db.collection('reservations').createIndex({ restaurantId: 1, reservationDate: 1, reservationTime: 1, status: 1 });
   await db.collection('reservations').createIndex({ reservationDate: 1, status: 1, restaurantId: 1 });

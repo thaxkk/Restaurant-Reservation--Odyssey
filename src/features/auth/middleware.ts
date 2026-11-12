@@ -1,27 +1,7 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// INTEGRATION STUB (Member B) — NOT the real auth.
-//
-// Member A owns the real version of this file on branch
-// `feature/auth-restaurants-admin`. It validates a `Bearer` token against the
-// `sessions` collection and sets `res.locals.auth`.
-//
-// This stub exposes the SAME interface (AuthContext / getAuth / requireAuth /
-// requireAdmin) so the reservations and waitlist modules compile and can be
-// tested standalone before integration. Instead of real tokens it trusts dev
-// headers:
-//     x-dev-user-id : 24-char hex ObjectId of the acting user   (required)
-//     x-dev-role    : "admin" to act as admin, otherwise "user"  (optional)
-//     x-dev-email   : email to put in the auth context           (optional)
-//
-// AT MERGE: delete this file and keep Member A's middleware.ts. The feature
-// modules import only { AuthContext, getAuth, requireAuth, requireAdmin } from
-// here, all of which her version also exports, so no feature code changes.
-// ─────────────────────────────────────────────────────────────────────────────
 import type { RequestHandler, Response } from 'express';
 import { ObjectId } from 'mongodb';
 import { ApiError } from '../../http.js';
-
-export type Role = 'user' | 'admin';
+import { sessions, tokenHash, users, type Role } from './sessions.js';
 
 export interface AuthContext {
   userId: ObjectId;
@@ -36,18 +16,17 @@ export function getAuth(res: Response): AuthContext {
   return auth;
 }
 
-export const requireAuth: RequestHandler = (req, res, next) => {
-  const id = req.header('x-dev-user-id');
-  if (!id || !ObjectId.isValid(id)) {
-    throw new ApiError(401, 'UNAUTHORIZED', 'Authentication required (dev stub: set x-dev-user-id header)');
-  }
-  const role: Role = req.header('x-dev-role') === 'admin' ? 'admin' : 'user';
-  res.locals.auth = {
-    userId: new ObjectId(id),
-    role,
-    email: req.header('x-dev-email') ?? 'dev@example.com',
-    sessionId: new ObjectId(),
-  } satisfies AuthContext;
+export const requireAuth: RequestHandler = async (req, res, next) => {
+  const header = req.header('authorization');
+  const match = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(header ?? '');
+  if (!match) throw new ApiError(401, 'UNAUTHORIZED', 'Authentication required');
+
+  const session = await sessions.findOne({ tokenHash: tokenHash(match[1]!), expiresAt: { $gt: new Date() } });
+  if (!session) throw new ApiError(401, 'UNAUTHORIZED', 'Invalid or expired session');
+  const user = await users.findOne({ _id: session.userId });
+  if (!user) throw new ApiError(401, 'UNAUTHORIZED', 'Invalid session');
+
+  res.locals.auth = { userId: user._id, role: user.role, email: user.email, sessionId: session._id } satisfies AuthContext;
   next();
 };
 

@@ -1,0 +1,86 @@
+{
+  "info": {
+    "name": "Odyssey API — Member A",
+    "description": "Run folder 1 once to register. Then run npm run admin:grant -- ada@example.com in the project. Run folder 2 to test admin endpoints. Running the whole collection before promotion stops after Login with an admin-role failure.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "email", "value": "ada@example.com" },
+    { "key": "password", "value": "change-this-password" },
+    { "key": "token", "value": "" },
+    { "key": "restaurantId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Register user (run once)",
+      "item": [
+    {
+      "name": "Register",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/auth/register",
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Ada\",\n  \"telephone\": \"0812345678\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Registered', () => pm.response.to.have.status(201));", "pm.test('Public registration has user role', () => pm.expect(pm.response.json().user.role).to.equal('user'));"], "type": "text/javascript" } }]
+    }
+      ]
+    },
+    {
+      "name": "2. Admin workflow (run after grant)",
+      "item": [
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/auth/login",
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Logged in', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) {", "  const result = pm.response.json();", "  pm.collectionVariables.set('token', result.token);", "  pm.test('Account has admin role (run admin:grant first)', () => pm.expect(result.user.role).to.equal('admin'));", "  if (result.user.role !== 'admin') pm.execution.setNextRequest(null);", "} else {", "  pm.execution.setNextRequest(null);", "}"], "type": "text/javascript" } }]
+    },
+    {
+      "name": "List restaurants",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/restaurants?page=1&limit=20" },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Restaurant list returned', () => pm.response.to.have.status(200));"], "type": "text/javascript" } }]
+    },
+    {
+      "name": "Create restaurant (admin)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/restaurants",
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Odyssey\",\n  \"address\": \"Bangkok\",\n  \"telephone\": \"021234567\",\n  \"opensAt\": \"10:00\",\n  \"closesAt\": \"22:00\",\n  \"totalTables\": 20\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Restaurant created', () => pm.response.to.have.status(201));", "if (pm.response.code === 201) pm.collectionVariables.set('restaurantId', pm.response.json().restaurant.id);", "else pm.execution.setNextRequest(null);"], "type": "text/javascript" } }]
+    },
+    {
+      "name": "Update restaurant (admin)",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/restaurants/{{restaurantId}}",
+        "body": { "mode": "raw", "raw": "{\n  \"totalTables\": 24\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Restaurant updated', () => pm.response.to.have.status(200));"], "type": "text/javascript" } }]
+    },
+    {
+      "name": "List reservations (admin)",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/admin/reservations?page=1&limit=20&sortBy=date&order=asc" },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Admin reservation list returned', () => pm.response.to.have.status(200));"], "type": "text/javascript" } }]
+    },
+    {
+      "name": "Delete restaurant (admin)",
+      "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/restaurants/{{restaurantId}}" },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Restaurant hidden', () => pm.response.to.have.status(204));"], "type": "text/javascript" } }]
+    },
+    {
+      "name": "Logout",
+      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/auth/logout" },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Logged out', () => pm.response.to.have.status(204));", "if (pm.response.code === 204) pm.collectionVariables.unset('token');"], "type": "text/javascript" } }]
+    }
+      ]
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../../db.js';
 import { ApiError, parse } from '../../http.js';
 import { requireAdmin, requireAuth } from '../auth/middleware.js';
+import { settlePastReservations } from '../reservations/service.js';
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -25,6 +26,7 @@ export const adminRouter = Router();
 
 adminRouter.get('/reservations', requireAuth, requireAdmin, async (req, res) => {
   const query = parse(querySchema, req.query);
+  await settlePastReservations();
   const direction = query.order === 'asc' ? 1 : -1;
   const match: Document = {};
   if (query.date) match.reservationDate = query.date;

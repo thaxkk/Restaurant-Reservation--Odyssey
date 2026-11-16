@@ -3,12 +3,13 @@
 // the waitlist service (avoids an import cycle). Depends only on the shared
 // capacity primitives and the waitlist model.
 import { ObjectId, type ClientSession } from 'mongodb';
-import { bookedTables } from '../reservations/capacity.js';
+import { isPastSlot } from '../../time.js';
+import { bookedTables, touchRestaurant, touchSlot, withTransaction } from '../reservations/capacity.js';
 import { restaurants } from '../reservations/model.js';
 import { OFFER_TTL_MS, waitlist } from './model.js';
 
 /**
- * Offer any free capacity in a slot to the earliest eligible waiting entry.
+ * Offer free capacity to the first waiting entry in strict queue order.
  * Called inside a transaction after capacity is released (cancel / shrink).
  *
  * At most one open offer per slot at a time: if an offer is already outstanding
@@ -21,32 +22,44 @@ export async function promoteWaitlist(
   date: string,
   time: string,
 ): Promise<void> {
+  await touchSlot(session, restaurantId, date, time);
+  const now = new Date();
   const outstanding = await waitlist.findOne(
     { restaurantId, reservationDate: date, reservationTime: time, status: 'offered' },
     { session },
   );
-  if (outstanding) return;
+  if (outstanding) {
+    if (!outstanding.offerExpiresAt || outstanding.offerExpiresAt > now) return;
+    await waitlist.updateOne(
+      { _id: outstanding._id, status: 'offered' },
+      { $set: { status: 'expired', updatedAt: now }, $unset: { offerExpiresAt: '' } },
+      { session },
+    );
+  }
 
-  const restaurant = await restaurants.findOne({ _id: restaurantId }, { session });
+  if (isPastSlot(date, time)) return;
+
+  const restaurant = await restaurants.findOne({ _id: restaurantId, deletedAt: null }, { session });
   if (!restaurant) return;
+  await touchRestaurant(session, restaurantId);
+  const currentRestaurant = await restaurants.findOne({ _id: restaurantId, deletedAt: null }, { session });
+  if (!currentRestaurant) return;
 
-  const available = restaurant.totalTables - (await bookedTables(session, restaurantId, date, time));
+  const available = currentRestaurant.totalTables - (await bookedTables(session, restaurantId, date, time));
   if (available <= 0) return;
 
-  // Earliest waiting entry that fits the freed capacity (FIFO by createdAt, _id).
+  // Strict FIFO: never skip an earlier entry that needs more tables.
   const next = await waitlist.findOne(
     {
       restaurantId,
       reservationDate: date,
       reservationTime: time,
       status: 'waiting',
-      tablesRequested: { $lte: available },
     },
     { session, sort: { createdAt: 1, _id: 1 } },
   );
-  if (!next) return;
+  if (!next || next.tablesRequested > available) return;
 
-  const now = new Date();
   await waitlist.updateOne(
     { _id: next._id },
     { $set: { status: 'offered', offerExpiresAt: new Date(now.getTime() + OFFER_TTL_MS), updatedAt: now } },
@@ -55,25 +68,28 @@ export async function promoteWaitlist(
 }
 
 /**
- * Expire offers whose deadline has passed and roll each freed slot to the next
- * waiting entry. Scoped to a single user's entries (called lazily on their reads
- * and before they accept) so there is no unbounded background sweep.
+ * Expire offers whose deadline has passed and offer the slot to the next user.
+ * Called periodically by the server and on a user's waitlist read.
  */
-export async function expireStaleOffers(
-  session: ClientSession,
-  userId: ObjectId,
-): Promise<void> {
+export async function processExpiredOffers(userId?: ObjectId): Promise<number> {
   const now = new Date();
   const stale = await waitlist
-    .find({ userId, status: 'offered', offerExpiresAt: { $lte: now } }, { session })
+    .find({ ...(userId ? { userId } : {}), status: 'offered', offerExpiresAt: { $lte: now } })
+    .limit(100)
     .toArray();
 
   for (const entry of stale) {
-    await waitlist.updateOne(
-      { _id: entry._id, status: 'offered' },
-      { $set: { status: 'expired', updatedAt: now }, $unset: { offerExpiresAt: '' } },
-      { session },
-    );
-    await promoteWaitlist(session, entry.restaurantId, entry.reservationDate, entry.reservationTime);
+    await withTransaction(async (session) => {
+      await touchSlot(session, entry.restaurantId, entry.reservationDate, entry.reservationTime);
+      const current = await waitlist.findOne({ _id: entry._id }, { session });
+      if (!current || current.status !== 'offered' || !current.offerExpiresAt || current.offerExpiresAt > new Date()) return;
+      await waitlist.updateOne(
+        { _id: entry._id, status: 'offered' },
+        { $set: { status: 'expired', updatedAt: new Date() }, $unset: { offerExpiresAt: '' } },
+        { session },
+      );
+      await promoteWaitlist(session, entry.restaurantId, entry.reservationDate, entry.reservationTime);
+    });
   }
+  return stale.length;
 }

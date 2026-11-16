@@ -34,6 +34,8 @@ const collections = {
       opensAt: { bsonType: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' },
       closesAt: { bsonType: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' },
       totalTables: { bsonType: 'int', minimum: 1 },
+      seatsPerTable: { bsonType: 'int', minimum: 1 },
+      capacityVersion: { bsonType: 'int', minimum: 0 },
       createdAt: { bsonType: 'date' },
       updatedAt: { bsonType: 'date' },
       deletedAt: { bsonType: 'date' },
@@ -100,11 +102,13 @@ async function setup() {
   await db.collection('reservations').createIndex({ userId: 1, reservationDate: 1, reservationTime: 1 });
   await db.collection('reservations').createIndex({ restaurantId: 1, reservationDate: 1, reservationTime: 1, status: 1 });
   await db.collection('reservations').createIndex({ reservationDate: 1, status: 1, restaurantId: 1 });
+  await db.collection('reservations').createIndex({ status: 1, reservationDate: 1, reservationTime: 1 });
   await db.collection('reservation_slots').createIndex(
     { restaurantId: 1, reservationDate: 1, reservationTime: 1 },
     { unique: true },
   );
   await db.collection('waitlist_entries').createIndex({ restaurantId: 1, reservationDate: 1, reservationTime: 1, status: 1, createdAt: 1, _id: 1 });
+  await db.collection('waitlist_entries').createIndex({ status: 1, offerExpiresAt: 1 });
   await db.collection('waitlist_entries').createIndex(
     { userId: 1, restaurantId: 1, reservationDate: 1, reservationTime: 1 },
     { unique: true, partialFilterExpression: { status: { $in: ['waiting', 'offered'] } } },

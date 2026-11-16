@@ -4,7 +4,7 @@ The starter project and database schema are in place. Build features in the orde
 
 ## Shared first step (both members)
 
-1. Agree on the four business rules listed at the end of [the API contract](docs/api-contract.md). Record decisions there before writing capacity logic.
+1. Review the business rules recorded in [the API contract](docs/api-contract.md): four seats per table by default, up to three tables per booking, strict waitlist order, and Bangkok local time.
 2. Run the setup in [README.md](README.md), create the Atlas collections and indexes, and confirm both health endpoints.
 3. Keep route handlers thin and put database work in feature modules. Use the shared error format and validation rules.
 

@@ -33,11 +33,32 @@ export async function withTransaction<T>(fn: (session: ClientSession) => Promise
 }
 
 /** Load a restaurant that exists and is not soft-deleted, or throw 404. */
-export async function loadActiveRestaurant(restaurantId: ObjectId): Promise<WithId<Restaurant>> {
+export async function loadActiveRestaurant(restaurantId: ObjectId, session?: ClientSession): Promise<WithId<Restaurant>> {
   // `deletedAt: null` matches documents where the field is null OR missing.
-  const restaurant = await restaurants.findOne({ _id: restaurantId, deletedAt: null });
+  const restaurant = await restaurants.findOne({ _id: restaurantId, deletedAt: null }, { session });
   if (!restaurant) throw new ApiError(404, 'RESTAURANT_NOT_FOUND', 'Restaurant not found');
   return restaurant;
+}
+
+/** Make bookings conflict with concurrent restaurant capacity updates or deletion. */
+export async function touchRestaurant(session: ClientSession, restaurantId: ObjectId): Promise<void> {
+  const result = await restaurants.updateOne(
+    { _id: restaurantId, deletedAt: null },
+    { $inc: { capacityVersion: 1 } },
+    { session },
+  );
+  if (result.matchedCount === 0) throw new ApiError(404, 'RESTAURANT_NOT_FOUND', 'Restaurant not found');
+}
+
+/** Check that a request can fit the restaurant's table and seating limits. */
+export function assertPartyFits(restaurant: Restaurant, partySize: number, tablesRequested: number): void {
+  if (tablesRequested > restaurant.totalTables) {
+    throw new ApiError(400, 'REQUEST_EXCEEDS_CAPACITY', 'Requested tables exceed this restaurant\'s total capacity');
+  }
+  const seatsPerTable = restaurant.seatsPerTable ?? 4;
+  if (partySize > tablesRequested * seatsPerTable) {
+    throw new ApiError(400, 'PARTY_TOO_LARGE', `Party size exceeds ${seatsPerTable} seats per table`);
+  }
 }
 
 /** Reject a reservation time outside the restaurant's opening hours. */

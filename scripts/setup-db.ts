@@ -100,11 +100,13 @@ async function setup() {
   await db.collection('reservations').createIndex({ userId: 1, reservationDate: 1, reservationTime: 1 });
   await db.collection('reservations').createIndex({ restaurantId: 1, reservationDate: 1, reservationTime: 1, status: 1 });
   await db.collection('reservations').createIndex({ reservationDate: 1, status: 1, restaurantId: 1 });
+  await db.collection('reservations').createIndex({ status: 1, reservationDate: 1, reservationTime: 1 });
   await db.collection('reservation_slots').createIndex(
     { restaurantId: 1, reservationDate: 1, reservationTime: 1 },
     { unique: true },
   );
   await db.collection('waitlist_entries').createIndex({ restaurantId: 1, reservationDate: 1, reservationTime: 1, status: 1, createdAt: 1, _id: 1 });
+  await db.collection('waitlist_entries').createIndex({ status: 1, offerExpiresAt: 1 });
   await db.collection('waitlist_entries').createIndex(
     { userId: 1, restaurantId: 1, reservationDate: 1, reservationTime: 1 },
     { unique: true, partialFilterExpression: { status: { $in: ['waiting', 'offered'] } } },

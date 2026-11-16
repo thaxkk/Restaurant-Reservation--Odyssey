@@ -24,6 +24,7 @@ export interface Restaurant {
   opensAt: string;
   closesAt: string;
   totalTables: number;
+  seatsPerTable?: number;
   deletedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
